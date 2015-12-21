@@ -184,6 +184,9 @@ void *av_realloc_f(void *ptr, size_t nelem, size_t elsize)
     return r;
 }
 
+/* work like REALLOC func
+ * realloc PTR to SIZE, and return ptr
+ */
 int av_reallocp(void *ptr, size_t size)
 {
     void *val;
@@ -193,7 +196,10 @@ int av_reallocp(void *ptr, size_t size)
         return 0;
     }
 
+    // when use memcpy instead of assignment?
+    // This ptr is void * pointer, In user case, this ptr is a pointer to pointer, is void **
     memcpy(&val, ptr, sizeof(val));
+    // val = *ptr;
     val = av_realloc(val, size);
 
     if (!val) {
@@ -201,6 +207,7 @@ int av_reallocp(void *ptr, size_t size)
         return AVERROR(ENOMEM);
     }
 
+    // *ptr = val;
     memcpy(ptr, &val, sizeof(val));
     return 0;
 }

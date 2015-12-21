@@ -64,6 +64,7 @@ static int alloc_and_copy(uint8_t **poutbuf, int *poutbuf_size,
     if (sps_pps)
         memcpy(*poutbuf + offset, sps_pps, sps_pps_size);
     memcpy(*poutbuf + sps_pps_size + nal_header_size + offset, in, in_size);
+    // copy start code
     if (!offset) {
         AV_WB32(*poutbuf + sps_pps_size, 1);
     } else {
@@ -75,6 +76,7 @@ static int alloc_and_copy(uint8_t **poutbuf, int *poutbuf_size,
     return 0;
 }
 
+// ONLY process SPS or PPS extra data
 static int h264_extradata_to_annexb(H264BSFContext *ctx, AVCodecContext *avctx, const int padding)
 {
     uint16_t unit_size;
@@ -118,6 +120,10 @@ static int h264_extradata_to_annexb(H264BSFContext *ctx, AVCodecContext *avctx, 
         memcpy(out + total_size - unit_size - 4, nalu_header, 4);
         memcpy(out + total_size - unit_size, extradata + 2, unit_size);
         extradata += 2 + unit_size;
+        printf("nal_len=%d(%x) data_len=%d(%x)\n",
+               unit_size, unit_size,
+               avctx->extradata_size - (extradata - avctx->extradata),
+               avctx->extradata_size - (extradata - avctx->extradata));
 pps:
         if (!unit_nb && !sps_done++) {
             unit_nb = *extradata++; /* number of pps unit(s) */
@@ -198,6 +204,7 @@ static int h264_mp4toannexb_filter(AVBitStreamFilterContext *bsfc,
         for (nal_size = 0, i = 0; i<ctx->length_size; i++)
             nal_size = (nal_size << 8) | buf[i];
 
+        printf("%05d %05x %02x%02x%02x%02x %02x nal size type:%x\n", nal_size, nal_size, buf[0], buf[1], buf[2], buf[3], buf[4], buf[ctx->length_size] & 0x1f);
         buf      += ctx->length_size;
         unit_type = *buf & 0x1f;
 
@@ -227,8 +234,10 @@ static int h264_mp4toannexb_filter(AVBitStreamFilterContext *bsfc,
         /* if this is a new IDR picture following an IDR picture, reset the idr flag.
          * Just check first_mb_in_slice to be 0 as this is the simplest solution.
          * This could be checking idr_pic_id instead, but would complexify the parsing. */
-        if (!ctx->new_idr && unit_type == 5 && (buf[1] & 0x80))
+        if (!ctx->new_idr && unit_type == 5 && (buf[1] & 0x80)) {
+            printf("new idr\n");
             ctx->new_idr = 1;
+        }
 
         /* prepend only to the first type 5 NAL unit of an IDR picture, if no sps/pps are already present */
         if (ctx->new_idr && unit_type == 5 && !ctx->idr_sps_seen && !ctx->idr_pps_seen) {
@@ -237,6 +246,7 @@ static int h264_mp4toannexb_filter(AVBitStreamFilterContext *bsfc,
                                buf, nal_size)) < 0)
                 goto fail;
             ctx->new_idr = 0;
+            // printf("kind 1\n");
         /* if only SPS has been seen, also insert PPS */
         } else if (ctx->new_idr && unit_type == 5 && ctx->idr_sps_seen && !ctx->idr_pps_seen) {
             if (ctx->pps_offset == -1) {
@@ -249,6 +259,7 @@ static int h264_mp4toannexb_filter(AVBitStreamFilterContext *bsfc,
                                         buf, nal_size)) < 0)
                 goto fail;
         } else {
+            // printf("kind 3\n");
             if ((ret=alloc_and_copy(poutbuf, poutbuf_size,
                                NULL, 0, buf, nal_size)) < 0)
                 goto fail;

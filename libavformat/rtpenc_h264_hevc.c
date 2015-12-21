@@ -179,6 +179,7 @@ static void nal_send(AVFormatContext *s1, const uint8_t *buf, int size, int last
 
 void ff_rtp_send_h264_hevc(AVFormatContext *s1, const uint8_t *buf1, int size)
 {
+    // r reading buffer pointer
     const uint8_t *r, *end = buf1 + size;
     RTPMuxContext *s = s1->priv_data;
 
@@ -189,10 +190,11 @@ void ff_rtp_send_h264_hevc(AVFormatContext *s1, const uint8_t *buf1, int size)
     else
         r = ff_avc_find_startcode(buf1, end);
     while (r < end) {
-        const uint8_t *r1;
+        const uint8_t *r1; // next reading buffer pointer
 
         if (s->nal_length_size) {
             r1 = ff_avc_mp4_find_startcode(r, end, s->nal_length_size);
+            // when r1 is NULL, send all data
             if (!r1)
                 r1 = end;
             r += s->nal_length_size;
@@ -200,6 +202,7 @@ void ff_rtp_send_h264_hevc(AVFormatContext *s1, const uint8_t *buf1, int size)
             while (!*(r++));
             r1 = ff_avc_find_startcode(r, end);
         }
+// nal_send(AVFormatContext *s1, const uint8_t *buf, int size, int last)
         nal_send(s1, r, r1 - r, r1 == end);
         r = r1;
     }

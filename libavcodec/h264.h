@@ -1184,6 +1184,7 @@ static inline int find_start_code(const uint8_t *buf, int buf_size,
     return FFMIN(buf_index, buf_size);
 }
 
+// ISO-14996-15
 static inline int get_avc_nalsize(H264Context *h, const uint8_t *buf,
                            int buf_size, int *buf_index)
 {

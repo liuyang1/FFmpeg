@@ -200,11 +200,14 @@ const uint8_t *ff_avc_mp4_find_startcode(const uint8_t *start,
 
     if (end - start < nal_length_size)
         return NULL;
+    // calc res is nal_size
     while (nal_length_size--)
         res = (res << 8) | *start++;
 
+    // EXCEPT nal_size greater than buffer length
     if (res > end - start)
         return NULL;
 
+    // return next nalu position
     return start + res;
 }

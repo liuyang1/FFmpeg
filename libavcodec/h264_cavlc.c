@@ -38,6 +38,8 @@
 #include "libavutil/avassert.h"
 
 
+// table 9-4 (b) in H.264 spec
+// ChromaArrayType is equal to 0 or 3
 static const uint8_t golomb_to_inter_cbp_gray[16]={
  0, 1, 2, 4, 8, 3, 5,10,12,15, 7,11,13,14, 6, 9,
 };
@@ -440,6 +442,7 @@ static inline int get_level_prefix(GetBitContext *gb){
  * @param max_coeff number of coefficients in the block
  * @return <0 if an error occurred
  */
+// 7.3.5.3.2 Residual block CAVLC syntax
 static int decode_residual(const H264Context *h, H264SliceContext *sl,
                            GetBitContext *gb, int16_t *block, int n,
                            const uint8_t *scantable, const uint32_t *qmul,
@@ -453,6 +456,7 @@ static int decode_residual(const H264Context *h, H264SliceContext *sl,
 
     if(max_coeff <= 8){
         if (max_coeff == 4)
+            // ce syntax
             coeff_token = get_vlc2(gb, chroma_dc_coeff_token_vlc.table, CHROMA_DC_COEFF_TOKEN_VLC_BITS, 1);
         else
             coeff_token = get_vlc2(gb, chroma422_dc_coeff_token_vlc.table, CHROMA422_DC_COEFF_TOKEN_VLC_BITS, 1);
@@ -632,6 +636,7 @@ static int decode_residual(const H264Context *h, H264SliceContext *sl,
     return 0;
 }
 
+// 7.3.5.3.1 residual luma syntax
 static av_always_inline
 int decode_luma_residual(const H264Context *h, H264SliceContext *sl,
                          GetBitContext *gb, const uint8_t *scan,
@@ -655,6 +660,7 @@ int decode_luma_residual(const H264Context *h, H264SliceContext *sl,
             for(i8x8=0; i8x8<4; i8x8++){
                 for(i4x4=0; i4x4<4; i4x4++){
                     const int index= i4x4 + 4*i8x8 + p*16;
+                    // residual_block(...)
                     if( decode_residual(h, sl, gb, sl->mb + (16*index << pixel_shift),
                         index, scan + 1, h->dequant4_coeff[p][qscale], 15) < 0 ){
                         return -1;
@@ -703,11 +709,13 @@ int decode_luma_residual(const H264Context *h, H264SliceContext *sl,
     }
 }
 
+// refer to H.264 7.3.4 slice data syntax section
+// When entropy_coding_mode_flag == 0
 int ff_h264_decode_mb_cavlc(const H264Context *h, H264SliceContext *sl)
 {
     int mb_xy;
     int partition_count;
-    unsigned int mb_type, cbp;
+    unsigned int mb_type, cbp; // cbp: coded_block_pattern
     int dct8x8_allowed= h->pps.transform_8x8_mode;
     int decode_chroma = h->sps.chroma_format_idc == 1 || h->sps.chroma_format_idc == 2;
     const int pixel_shift = h->pixel_shift;
@@ -737,6 +745,7 @@ int ff_h264_decode_mb_cavlc(const H264Context *h, H264SliceContext *sl)
 
     sl->prev_mb_skipped = 0;
 
+    // Macroblock layer syntax
     mb_type= get_ue_golomb(&sl->gb);
     if (sl->slice_type_nos == AV_PICTURE_TYPE_B) {
         if(mb_type < 23){
@@ -798,11 +807,11 @@ decode_intra_mb:
     fill_decode_neighbors(h, sl, mb_type);
     fill_decode_caches(h, sl, mb_type);
 
-    //mb_pred
+    // mb_pred
     if(IS_INTRA(mb_type)){
         int pred_mode;
 //            init_top_left_availability(h);
-        if(IS_INTRA4x4(mb_type)){
+        if(IS_INTRA4x4(mb_type)){ // or Intra_8x8 Intra_16x16
             int i;
             int di = 1;
             if(dct8x8_allowed && get_bits1(&sl->gb)){
@@ -1061,14 +1070,24 @@ decode_intra_mb:
     if(IS_INTER(mb_type))
         write_back_motion(h, sl, mb_type);
 
+    /*
+     * if (MbPartPredMode(mb_type, 0) != Intra_16x16) {
+     *      `coded_block_pattern`
+     *      if (CodedBlockPatternLuma > 0 && ...) {
+     *          `transform_size_8x8_flag`
+     *      }
+     * }
+     */
     if(!IS_INTRA16x16(mb_type)){
         cbp= get_ue_golomb(&sl->gb);
+        // why me syntax type in spec???
 
         if(decode_chroma){
             if(cbp > 47){
                 av_log(h->avctx, AV_LOG_ERROR, "cbp too large (%u) at %d %d\n", cbp, sl->mb_x, sl->mb_y);
                 return -1;
             }
+            // ue map to me as coded_block_pattern table
             if(IS_INTRA4x4(mb_type)) cbp= golomb_to_intra4x4_cbp[cbp];
             else                     cbp= golomb_to_inter_cbp   [cbp];
         }else{
@@ -1093,6 +1112,12 @@ decode_intra_mb:
     h->cbp_table[mb_xy]= cbp;
     h->cur_pic.mb_type[mb_xy] = mb_type;
 
+    /*  if (CodedBlockPatternLuma > 0 || CodedBlockPatternChroma > 0 ||
+     *      MbPartPredMode(mb_type, 0) == Intra_16x16) {
+     *      `mb_qp_delta`
+     *      residual(0, 15)
+     *  }
+     */
     if(cbp || IS_INTRA16x16(mb_type)){
         int i4x4, i8x8, chroma_idx;
         int dquant;
@@ -1109,7 +1134,7 @@ decode_intra_mb:
             scan    = sl->qscale ? h->zigzag_scan : h->zigzag_scan_q0;
         }
 
-        dquant= get_se_golomb(&sl->gb);
+        dquant= get_se_golomb(&sl->gb); // mb_qp_delta
 
         sl->qscale += dquant;
 
@@ -1125,6 +1150,19 @@ decode_intra_mb:
         sl->chroma_qp[0] = get_chroma_qp(h, 0, sl->qscale);
         sl->chroma_qp[1] = get_chroma_qp(h, 1, sl->qscale);
 
+        // 7.3.5.3 Residual data syntax in H.264 spec
+        /*  residual(startIdx, endIdx) {
+         *  residual_luma(...);
+         *  ...
+         *  if (ChromaArrayType == 3) {
+         *      residual_luma(...);
+         *      residual_luma(...);
+         *  } else if (ChromaArrayType == 1 || ChromaArrayType == 2) {
+         *      for (...) {
+         *          residual_block(...);
+         *      }
+         *  }
+         */
         if ((ret = decode_luma_residual(h, sl, gb, scan, scan8x8, pixel_shift, mb_type, cbp, 0)) < 0 ) {
             return -1;
         }

@@ -51,6 +51,7 @@
 #define UNCHECKED_BITSTREAM_READER !CONFIG_SAFE_BITSTREAM_READER
 #endif
 
+// Basic buffer context
 typedef struct GetBitContext {
     const uint8_t *buffer, *buffer_end;
     int index;
@@ -122,7 +123,7 @@ typedef struct RL_VLC_ELEM {
 #ifdef LONG_BITSTREAM_READER
 #   define MIN_CACHE_BITS 32
 #else
-#   define MIN_CACHE_BITS 25
+#   define MIN_CACHE_BITS 25 // why 25???
 #endif
 
 #define OPEN_READER_NOSIZE(name, gb)            \
@@ -349,7 +350,7 @@ static inline unsigned int get_bits_long(GetBitContext *s, int n)
     } else if (n <= MIN_CACHE_BITS) {
         return get_bits(s, n);
     } else {
-#ifdef BITSTREAM_READER_LE
+#ifdef BITSTREAM_READER_LE // ??
         unsigned ret = get_bits(s, 16);
         return ret | (get_bits(s, n - 16) << 16);
 #else

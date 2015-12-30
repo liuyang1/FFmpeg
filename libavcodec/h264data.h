@@ -39,6 +39,8 @@ static const uint8_t golomb_to_pict_type[5] = {
     AV_PICTURE_TYPE_SP, AV_PICTURE_TYPE_SI
 };
 
+// table 9-4 (a) in H.264 spec
+// ChromaArrayType is equal to 1 or 2
 static const uint8_t golomb_to_intra4x4_cbp[48] = {
     47, 31, 15, 0,  23, 27, 29, 30, 7,  11, 13, 14, 39, 43, 45, 46,
     16, 3,  5,  10, 12, 19, 21, 26, 28, 35, 37, 42, 44, 1,  2,  4,
@@ -51,6 +53,25 @@ static const uint8_t golomb_to_inter_cbp[48] = {
     17, 18, 20, 24, 19, 21, 26, 28, 23, 27, 29, 30, 22, 25, 38, 41
 };
 
+// This is after zig-zag scan reverse-mapping table
+/*
+ * 0-1 2-3
+ *  / / /
+ * 4 5 6 7
+ * |/ / /|
+ * 8 9 0 1
+ *  / / /
+ * 2-3 4-5
+ * (omit leading 1 for [10, 11, .., 15] for easy alignment)
+ *
+ * so this scan result is
+ * {
+ *     0,  1,  4,  8,
+ *     5,  2,  3,  6,
+ *     9, 12, 13, 10,
+ *     7, 11, 14, 15
+ * }
+ */
 static const uint8_t zigzag_scan[16+1] = {
     0 + 0 * 4, 1 + 0 * 4, 0 + 1 * 4, 0 + 2 * 4,
     1 + 1 * 4, 2 + 0 * 4, 3 + 0 * 4, 2 + 1 * 4,

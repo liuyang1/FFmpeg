@@ -1912,6 +1912,8 @@ static av_always_inline void decode_cabac_luma_residual(const H264Context *h, H2
  * Decode a macroblock.
  * @return 0 if OK, ER_AC_ERROR / ER_DC_ERROR / ER_MV_ERROR if an error is noticed
  */
+// refer to H.264 7.3.4 slice data syntax section
+// When entropy_coding_mode_flag == 1
 int ff_h264_decode_mb_cabac(const H264Context *h, H264SliceContext *sl)
 {
     int mb_xy;
@@ -1929,7 +1931,7 @@ int ff_h264_decode_mb_cabac(const H264Context *h, H264SliceContext *sl)
         if (FRAME_MBAFF(h) && (sl->mb_y & 1) == 1 && sl->prev_mb_skipped)
             skip = sl->next_mb_skipped;
         else
-            skip = decode_cabac_mb_skip(h, sl, sl->mb_x, sl->mb_y );
+            skip = decode_cabac_mb_skip(h, sl, sl->mb_x, sl->mb_y ); // ae
         /* read skip flags */
         if( skip ) {
             if (FRAME_MBAFF(h) && (sl->mb_y & 1) == 0) {

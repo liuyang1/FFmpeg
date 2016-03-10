@@ -67,23 +67,28 @@
 
 #include "qtpalette.h"
 
+#define LOG(fmt, arg...) fprintf(stdout, "%s:%d " fmt "\n", __FUNCTION__, __LINE__, arg);
+// Ref: https://matroska.org/technical/specs/index.html
+
+// basic type of EBML
 typedef enum {
     EBML_NONE,
     EBML_UINT,
-    EBML_FLOAT,
+    EBML_FLOAT, // big-endian, 4 or 8 octets
     EBML_STR,
-    EBML_UTF8,
+    EBML_UTF8, // Unicode string, zero padded when needed RFC2279
     EBML_BIN,
     EBML_NEST,
     EBML_LEVEL1,
     EBML_PASS,
     EBML_STOP,
-    EBML_SINT,
+    EBML_SINT, // signed int, big endian, any size from 1 to 8 octets
     EBML_TYPE_COUNT
 } EbmlType;
 
+// KEY struct
 typedef const struct EbmlSyntax {
-    uint32_t id;
+    uint32_t id; // descriptor for the size of the element, and binary data itself
     EbmlType type;
     int list_elem_size;
     int data_offset;
@@ -361,6 +366,8 @@ typedef struct MatroskaBlock {
     int64_t discard_padding;
 } MatroskaBlock;
 
+// mkv digram
+// ref: https://matroska.org/technical/diagram/index.html
 static const EbmlSyntax ebml_header[] = {
     { EBML_ID_EBMLREADVERSION,    EBML_UINT, 0, offsetof(Ebml, version),         { .u = EBML_VERSION } },
     { EBML_ID_EBMLMAXSIZELENGTH,  EBML_UINT, 0, offsetof(Ebml, max_size),        { .u = 8 } },
@@ -778,6 +785,21 @@ static int ebml_level_end(MatroskaDemuxContext *matroska)
 }
 
 /*
+ * Element ID coded with an *UTF-8 like system* :
+ *
+ * bits, big-endian
+ * 1xxx xxxx                                  - Class A IDs (2^7 -1 possible values) (base 0x8X)
+ * 01xx xxxx  xxxx xxxx                       - Class B IDs (2^14-1 possible values) (base 0x4X 0xXX)
+ * 001x xxxx  xxxx xxxx  xxxx xxxx            - Class C IDs (2^21-1 possible values) (base 0x2X 0xXX 0xXX)
+ * 0001 xxxx  xxxx xxxx  xxxx xxxx  xxxx xxxx - Class D IDs (2^28-1 possible values) (base 0x1X 0xXX 0xXX 0xXX)
+ *
+ * Some Notes:
+ *
+ *     The leading bits of the EBML IDs are used to identify the length of the ID.
+ *     The number of leading 0's + 1 is the length of the ID in octets.
+ *     We will refer to the leading bits as the Length Descriptor.
+ */
+/*
  * Read: an "EBML number", which is defined as a variable-length
  * array of bytes. The first byte indicates the length by giving a
  * number of 0-bits followed by a one. The position of the first
@@ -1019,6 +1041,37 @@ static int ebml_parse_id(MatroskaDemuxContext *matroska, EbmlSyntax *syntax,
     return ebml_parse_elem(matroska, &syntax[i], data);
 }
 
+#define stringfy(x) case x: return #x; break;
+static const char *show(uint32_t id) {
+    switch(id) {
+        stringfy(MATROSKA_ID_TRACKENTRY);
+        stringfy(MATROSKA_ID_TRACKNUMBER);
+        stringfy(MATROSKA_ID_TRACKUID);
+        stringfy(MATROSKA_ID_TRACKTYPE);
+        stringfy(MATROSKA_ID_TRACKVIDEO);
+        stringfy(MATROSKA_ID_TRACKAUDIO);
+        stringfy(MATROSKA_ID_TRACKOPERATION);
+        stringfy(MATROSKA_ID_TRACKCOMBINEPLANES);
+        stringfy(MATROSKA_ID_TRACKPLANE);
+        stringfy(MATROSKA_ID_TRACKPLANEUID);
+        stringfy(MATROSKA_ID_TRACKPLANETYPE);
+        stringfy(MATROSKA_ID_TRACKFLAGLACING);
+        stringfy(MATROSKA_ID_TRACKMINCACHE);
+        stringfy(MATROSKA_ID_TRACKMAXCACHE);
+        stringfy(MATROSKA_ID_TRACKDEFAULTDURATION);
+        stringfy(MATROSKA_ID_TRACKCONTENTENCODINGS);
+        stringfy(MATROSKA_ID_TRACKCONTENTENCODING);
+        stringfy(MATROSKA_ID_TRACKTIMECODESCALE);
+        stringfy(MATROSKA_ID_TRACKMAXBLKADDID);
+
+        stringfy(MATROSKA_ID_VIDEOPIXELWIDTH);
+        stringfy(MATROSKA_ID_VIDEOPIXELHEIGHT);
+        stringfy(MATROSKA_ID_VIDEODISPLAYHEIGHT);
+        stringfy(MATROSKA_ID_VIDEODISPLAYWIDTH);
+        default: return "unknown";
+    }
+}
+
 static int ebml_parse(MatroskaDemuxContext *matroska, EbmlSyntax *syntax,
                       void *data)
 {
@@ -1032,6 +1085,9 @@ static int ebml_parse(MatroskaDemuxContext *matroska, EbmlSyntax *syntax,
         }
         matroska->current_id = id | 1 << 7 * res;
     }
+
+    LOG("current_id=%#-10x %s",
+        matroska->current_id, show(matroska->current_id));
     return ebml_parse_id(matroska, syntax, matroska->current_id, data);
 }
 
@@ -1241,6 +1297,7 @@ static void ebml_free(EbmlSyntax *syntax, void *data)
  */
 static int matroska_probe(AVProbeData *p)
 {
+    LOG("%s", "enter probe");
     uint64_t total = 0;
     int len_mask = 0x80, size = 1, n = 1, i;
 
@@ -2404,6 +2461,8 @@ static int matroska_read_header(AVFormatContext *s)
 
     /* The next thing is a segment. */
     pos = avio_tell(matroska->ctx->pb);
+    LOG("%s", "call ebml_parse");
+    // parse segments by pre-defined struct
     res = ebml_parse(matroska, matroska_segments, matroska);
     // try resyncing until we find a EBML_STOP type element.
     while (res != 1) {

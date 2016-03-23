@@ -62,7 +62,7 @@ static int hevc_parse_slice_header(AVCodecParserContext *s, HEVCNAL *nal,
 
     pps_id = get_ue_golomb_long(gb);
     if (pps_id >= MAX_PPS_COUNT || !ctx->ps.pps_list[pps_id]) {
-        av_log(avctx, AV_LOG_ERROR, "PPS id out of range: %d\n", pps_id);
+        av_log(avctx, AV_LOG_ERROR, "parser0 PPS id out of range: %d\n", pps_id);
         return AVERROR_INVALIDDATA;
     }
     pps = (HEVCPPS*)ctx->ps.pps_list[pps_id]->data;
@@ -172,6 +172,29 @@ static int hevc_find_frame_end(AVCodecParserContext *s, const uint8_t *buf,
     return END_NOT_FOUND;
 }
 
+#define LEN 128
+static inline int show_buf(AVCodecContext *avctx, const uint8_t *buf, int buf_size) {
+    char s[LEN];
+    int i, offset;
+    av_log(avctx, AV_LOG_ERROR, "buf=%p buf_size=%d\n", buf, buf_size);
+    if (buf_size >= 128) {
+        buf_size = 128;
+    }
+    for (i = 0, offset = 0; i != buf_size; i++) {
+        offset += snprintf(s + offset, LEN - offset, "%02hhx ", buf[i]);
+        if ((i + 1) % 4 == 0) {
+            offset += snprintf(s + offset, LEN - offset, "    ");
+        }
+        if ((i + 1) % 16 == 0) {
+            av_log(avctx, AV_LOG_ERROR, "%s\n", s);
+            offset = 0;
+        }
+    }
+    if (offset != 0) {
+        av_log(avctx, AV_LOG_ERROR, "%s\n", s);
+    }
+    return 0;
+}
 #if ADVANCED_PARSER
 /**
  * Parse NAL units of found picture and decode some basic information.
@@ -223,6 +246,7 @@ static inline int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
 
     nal = &pkt->nals[0];
 
+    show_buf(avctx, buf, buf_size);
     for (;;) {
         int src_length, consumed;
         int ret;
@@ -233,19 +257,28 @@ static inline int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
 
         h->nal_unit_type = (*buf >> 1) & 0x3f;
         h->temporal_id   = (*(buf + 1) & 0x07) - 1;
-        if (h->nal_unit_type <= NAL_CRA_NUT) {
+        av_log(avctx, AV_LOG_ERROR, "xxx line276 nal_unit_type=%d(%s) layer_id=%d\n",
+               h->nal_unit_type, nal_unit_name(h->nal_unit_type),
+               h->temporal_id);
+        if (h->nal_unit_type <= NAL_CRA_NUT) { // so VPS, PPS, SPS not here
             // Do not walk the whole buffer just to decode slice segment header
             if (src_length > 20)
                 src_length = 20;
         }
 
         consumed = ff_hevc_extract_rbsp(NULL, buf, src_length, nal);
-        if (consumed < 0)
+        av_log(avctx, AV_LOG_ERROR, "xxx consumed=%d\n", consumed);
+        if (consumed < 0) {
+            av_log(avctx, AV_LOG_ERROR, "xxx consumed neg\n");
             return consumed;
+        }
 
         ret = init_get_bits8(gb, nal->data + 2, nal->size);
-        if (ret < 0)
+        av_log(avctx, AV_LOG_ERROR, "xxx ret=%#x\n", ret);
+        if (ret < 0) {
+            av_log(avctx, AV_LOG_ERROR, "xxx ret=%#x exit\n", ret);
             return ret;
+        }
 
         switch (h->nal_unit_type) {
         case NAL_VPS:
@@ -294,7 +327,8 @@ static inline int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
 
             sh->pps_id = get_ue_golomb(gb);
             if (sh->pps_id >= MAX_PPS_COUNT || !ps->pps_list[sh->pps_id]) {
-                av_log(avctx, AV_LOG_ERROR, "PPS id out of range: %d\n", sh->pps_id);
+                // TODO:
+                av_log(avctx, AV_LOG_ERROR, "xxx parse1 PPS id out of range: %d\n", sh->pps_id);
                 return AVERROR_INVALIDDATA;
             }
             ps->pps = (HEVCPPS*)ps->pps_list[sh->pps_id]->data;

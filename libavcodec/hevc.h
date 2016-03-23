@@ -107,6 +107,12 @@ enum NALUnitType {
     NAL_IDR_W_RADL = 19,
     NAL_IDR_N_LP   = 20,
     NAL_CRA_NUT    = 21,
+    NAL_RSV_IRAP_VCL22 = 22,
+    NAL_RSV_IRAP_VCL23 = 23,
+    NAL_RSV_VCL24 = 24,
+    NAL_RSV_VCL27 = 27,
+    // ...
+    NAL_RSV_VCL31 = 31,
     NAL_VPS        = 32,
     NAL_SPS        = 33,
     NAL_PPS        = 34,
@@ -118,6 +124,7 @@ enum NALUnitType {
     NAL_SEI_SUFFIX = 40,
 };
 
+const char *nal_unit_name(int nal_type);
 enum RPSType {
     ST_CURR_BEF = 0,
     ST_CURR_AFT,

@@ -146,7 +146,7 @@ nsc:
     return si;
 }
 
-static const char *nal_unit_name(int nal_type)
+const char *nal_unit_name(int nal_type)
 {
     switch(nal_type) {
     case NAL_TRAIL_N    : return "TRAIL_N";

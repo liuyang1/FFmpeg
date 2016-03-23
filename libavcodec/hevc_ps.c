@@ -1436,7 +1436,7 @@ int ff_hevc_decode_nal_pps(GetBitContext *gb, AVCodecContext *avctx,
     // Coded parameters
     pps_id = get_ue_golomb_long(gb);
     if (pps_id >= MAX_PPS_COUNT) {
-        av_log(avctx, AV_LOG_ERROR, "PPS id out of range: %d\n", pps_id);
+        av_log(avctx, AV_LOG_ERROR, "hevc_ps PPS id out of range: %d\n", pps_id);
         ret = AVERROR_INVALIDDATA;
         goto err;
     }

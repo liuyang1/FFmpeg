@@ -298,6 +298,7 @@ static int decode_nal_sei_prefix(HEVCContext *s, int type, int size)
     case SEI_TYPE_PICTURE_TIMING:
         {
             int ret = decode_pic_timing(s);
+            av_log(s->avctx, AV_LOG_ERROR, "will skip SEI pic_timing\n");
             av_log(s->avctx, AV_LOG_DEBUG, "Skipped PREFIX SEI %d\n", type);
             skip_bits(gb, 8 * size);
             return ret;
@@ -349,6 +350,8 @@ static int decode_nal_sei_message(HEVCContext *s)
         byte          = get_bits(gb, 8);
         payload_size += byte;
     }
+    av_log(s->avctx, AV_LOG_ERROR, "SEI payload type=%d size=%d\n",
+           payload_type, payload_size);
     if (s->nal_unit_type == NAL_SEI_PREFIX) {
         return decode_nal_sei_prefix(s, payload_type, payload_size);
     } else { /* nal_unit_type == NAL_SEI_SUFFIX */

@@ -48,6 +48,14 @@ static const uint8_t golomb_to_intra4x4_cbp_gray[16]={
 15, 0, 7,11,13,14, 3, 5,10,12, 1, 2, 4, 8, 6, 9,
 };
 
+// table 9-5 in H.264 spec
+/* combine len and bits table.
+ * (2, 1) -> 0b01
+ * (7, 6) -> 0b0000 110
+ * This page introduce it.
+ * http://blog.csdn.net/carrotchen/article/details/6153705
+ */
+// nC == -1
 static const uint8_t chroma_dc_coeff_token_len[4*5]={
  2, 0, 0, 0,
  6, 1, 0, 0,
@@ -64,6 +72,7 @@ static const uint8_t chroma_dc_coeff_token_bits[4*5]={
  2, 3, 2, 0,
 };
 
+// nC == -2
 static const uint8_t chroma422_dc_coeff_token_len[4*9]={
   1,  0,  0,  0,
   7,  2,  0,  0,
@@ -90,6 +99,7 @@ static const uint8_t chroma422_dc_coeff_token_bits[4*9]={
 
 static const uint8_t coeff_token_len[4][4*17]={
 {
+    // 0 <= nC < 2
      1, 0, 0, 0,
      6, 2, 0, 0,     8, 6, 3, 0,     9, 8, 7, 5,    10, 9, 8, 6,
     11,10, 9, 7,    13,11,10, 8,    13,13,11, 9,    13,13,13,10,
@@ -97,6 +107,7 @@ static const uint8_t coeff_token_len[4][4*17]={
     16,15,15,15,    16,16,16,15,    16,16,16,16,    16,16,16,16,
 },
 {
+    // 2 <= nC < 4
      2, 0, 0, 0,
      6, 2, 0, 0,     6, 5, 3, 0,     7, 6, 6, 4,     8, 6, 6, 4,
      8, 7, 7, 5,     9, 8, 8, 6,    11, 9, 9, 6,    11,11,11, 7,
@@ -104,6 +115,7 @@ static const uint8_t coeff_token_len[4][4*17]={
     13,13,13,13,    13,14,13,13,    14,14,14,13,    14,14,14,14,
 },
 {
+    // 4 <= nC < 8
      4, 0, 0, 0,
      6, 4, 0, 0,     6, 5, 4, 0,     6, 5, 5, 4,     7, 5, 5, 4,
      7, 5, 5, 4,     7, 6, 6, 4,     7, 6, 6, 4,     8, 7, 7, 5,
@@ -111,6 +123,7 @@ static const uint8_t coeff_token_len[4][4*17]={
     10, 9, 9, 9,    10,10,10,10,    10,10,10,10,    10,10,10,10,
 },
 {
+    // 8 <= nC
      6, 0, 0, 0,
      6, 6, 0, 0,     6, 6, 6, 0,     6, 6, 6, 6,     6, 6, 6, 6,
      6, 6, 6, 6,     6, 6, 6, 6,     6, 6, 6, 6,     6, 6, 6, 6,
@@ -121,6 +134,7 @@ static const uint8_t coeff_token_len[4][4*17]={
 
 static const uint8_t coeff_token_bits[4][4*17]={
 {
+    // 0 <= nC < 2
      1, 0, 0, 0,
      5, 1, 0, 0,     7, 4, 1, 0,     7, 6, 5, 3,     7, 6, 5, 3,
      7, 6, 5, 4,    15, 6, 5, 4,    11,14, 5, 4,     8,10,13, 4,
@@ -128,6 +142,7 @@ static const uint8_t coeff_token_bits[4][4*17]={
     15, 1, 9,12,    11,14,13, 8,     7,10, 9,12,     4, 6, 5, 8,
 },
 {
+    // 2 <= nC < 4
      3, 0, 0, 0,
     11, 2, 0, 0,     7, 7, 3, 0,     7,10, 9, 5,     7, 6, 5, 4,
      4, 6, 5, 6,     7, 6, 5, 8,    15, 6, 5, 4,    11,14,13, 4,
@@ -135,6 +150,7 @@ static const uint8_t coeff_token_bits[4][4*17]={
     11,10, 9,12,     7,11, 6, 8,     9, 8,10, 1,     7, 6, 5, 4,
 },
 {
+    // 4 <= nC < 8
     15, 0, 0, 0,
     15,14, 0, 0,    11,15,13, 0,     8,12,14,12,    15,10,11,11,
     11, 8, 9,10,     9,14,13, 9,     8,10, 9, 8,    15,14,13,13,
@@ -142,6 +158,7 @@ static const uint8_t coeff_token_bits[4][4*17]={
     13, 7, 9,12,     9,12,11,10,     5, 8, 7, 6,     1, 4, 3, 2,
 },
 {
+    // 8 <= nC
      3, 0, 0, 0,
      0, 1, 0, 0,     4, 5, 6, 0,     8, 9,10,11,    12,13,14,15,
     16,17,18,19,    20,21,22,23,    24,25,26,27,    28,29,30,31,
@@ -150,6 +167,8 @@ static const uint8_t coeff_token_bits[4][4*17]={
 }
 };
 
+// table 9-7 & table 9-8
+// NOTICE: Diagonal symmetry
 static const uint8_t total_zeros_len[16][16]= {
     {1,3,3,4,4,5,5,6,6,7,7,8,8,9,9,9},
     {3,3,3,3,3,4,4,4,4,5,5,6,6,6,6},
@@ -186,6 +205,7 @@ static const uint8_t total_zeros_bits[16][16]= {
     {0,1},
 };
 
+// Table 9-9 (a)
 static const uint8_t chroma_dc_total_zeros_len[3][4]= {
     { 1, 2, 3, 3,},
     { 1, 2, 2, 0,},
@@ -198,6 +218,7 @@ static const uint8_t chroma_dc_total_zeros_bits[3][4]= {
     { 1, 0, 0, 0,},
 };
 
+// Table 9-9 (b)
 static const uint8_t chroma422_dc_total_zeros_len[7][8]= {
     { 1, 3, 3, 4, 4, 4, 5, 5 },
     { 3, 2, 3, 3, 3, 3, 3 },
@@ -218,6 +239,7 @@ static const uint8_t chroma422_dc_total_zeros_bits[7][8]= {
     { 0, 1 },
 };
 
+// Table 9-10
 static const uint8_t run_len[7][16]={
     {1,1},
     {1,2,2},

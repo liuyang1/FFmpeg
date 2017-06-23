@@ -56,6 +56,7 @@ typedef enum {
     HEVC_SEI_TYPE_REGION_REFRESH_INFO                  = 134,
     HEVC_SEI_TYPE_MASTERING_DISPLAY_INFO               = 137,
     HEVC_SEI_TYPE_CONTENT_LIGHT_LEVEL_INFO             = 144,
+    HEVC_SEI_TYPE_ALTERNATIVE_TC                       = 147,
 } HEVC_SEI_Type;
 
 typedef struct HEVCSEIPictureHash {
@@ -109,6 +110,7 @@ typedef struct HEVCSEIContext {
     HEVCSEIMasteringDisplay mastering_display;
     HEVCSEIContentLight content_light;
     int active_seq_parameter_set_id;
+    uint8_t preferred_transfer_characteristic;
 } HEVCSEIContext;
 
 struct HEVCParamSets;

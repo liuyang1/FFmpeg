@@ -236,6 +236,15 @@ static int decode_nal_sei_user_data_registered_itu_t_t35(HEVCSEIContext *s, GetB
     return 0;
 }
 
+static int decode_nal_sei_alternative_transfer_characteristics(HEVCSEIContext *s, GetBitContext *gb,
+                                                               void *logctx)
+{
+    s->preferred_transfer_characteristic = get_bits(gb, 8);
+    av_log(logctx, AV_LOG_DEBUG, "preferred_transfer_characteristic %d\n",
+           s->preferred_transfer_characteristic);
+    return 0;
+}
+
 static int decode_nal_sei_active_parameter_sets(HEVCSEIContext *s, GetBitContext *gb, void *logctx)
 {
     int num_sps_ids_minus1;
@@ -285,6 +294,8 @@ static int decode_nal_sei_prefix(GetBitContext *gb, HEVCSEIContext *s, const HEV
         return decode_nal_sei_active_parameter_sets(s, gb, logctx);
     case HEVC_SEI_TYPE_USER_DATA_REGISTERED_ITU_T_T35:
         return decode_nal_sei_user_data_registered_itu_t_t35(s, gb, size);
+    case HEVC_SEI_TYPE_ALTERNATIVE_TC:
+        return decode_nal_sei_alternative_transfer_characteristics(s, gb, logctx);
     default:
         av_log(logctx, AV_LOG_DEBUG, "Skipped PREFIX SEI %d\n", type);
         skip_bits_long(gb, 8 * size);
